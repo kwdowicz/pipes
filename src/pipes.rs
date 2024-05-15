@@ -79,16 +79,6 @@ impl Broker {
         }
     }
 
-    pub fn fetch(&self, pipe_name: &str, client_id: &str) -> Option<Vec<Msg>> {
-        if self.pipes.is_empty() {
-            return None;
-        }
-        match self.pipes.get(&pipe_name.to_string()) {
-            Some(pipe) => pipe.fetch(&client_id.to_string()),
-            None => None,
-        }
-    }
-
     pub fn consumed_ack(&mut self, msg_id: &str, client_id: &str) {
         self.msgs_clients
             .entry(msg_id.to_string())
@@ -291,7 +281,7 @@ mod tests {
         broker.new_pipe("pipe1");
         broker.sub("pipe1", "client1");
 
-        let msgs = broker.fetch("pipe1", "client1");
+        let msgs = broker.fetch_all("client1");
         assert!(msgs.is_none());
     }
 
