@@ -1,15 +1,13 @@
 use std::io::{Error, ErrorKind};
 use std::sync::Arc;
 use tokio::io::{split, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::tcp::{OwnedWriteHalf, WriteHalf};
+use tokio::net::tcp::{OwnedWriteHalf, ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpSocket, TcpStream};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::sync::Mutex;
 mod pipes;
 use lazy_static::lazy_static;
 use pipes::Broker;
-
-type SharedClients = Arc<Mutex<Vec<Sender<Vec<u8>>>>>;
 
 lazy_static! {
     static ref BROKER: Arc<Mutex<Broker>> = Arc::new(Mutex::new(Broker::new("local")));
