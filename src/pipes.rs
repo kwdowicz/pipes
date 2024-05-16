@@ -31,30 +31,34 @@ impl Broker {
         payload: &str,
         tag: Option<String>,
     ) -> Result<(), Error> {
+        let pipe = self
+            .pipes
+            .get_mut(&pipe_name.to_string())
+            .ok_or_else(|| Error::new(ErrorKind::NotFound, "Pipe not found"))?;
+
+        let msg = Msg::new(payload, &pipe.name.clone(), tag);
+        pipe.post(msg);
+
+        Ok(())
+    }
+
+    pub fn sub(&mut self, pipe_name: &str, client_id: &str) -> Result<(), Error> {
         match self.pipes.get_mut(&pipe_name.to_string()) {
             Some(pipe) => {
-                match tag {
-                    Some(t) => pipe.post(Msg::new(payload, &pipe.name.clone(), Some(t))),
-                    None => pipe.post(Msg::new(payload, &pipe.name.clone(), None)),
-                }
-
+                pipe.sub(client_id);
                 Ok(())
             }
             None => Err(Error::new(ErrorKind::NotFound, "Pipe not found")),
         }
     }
 
-    pub fn sub(&mut self, pipe_name: &str, client_id: &str) {
+    pub fn unsub(&mut self, pipe_name: &str, client_id: &str) -> Result<(), Error> {
         match self.pipes.get_mut(&pipe_name.to_string()) {
-            Some(pipe) => pipe.sub(client_id),
-            None => (),
-        }
-    }
-
-    pub fn unsub(&mut self, pipe_name: &str, client_id: &str) {
-        match self.pipes.get_mut(&pipe_name.to_string()) {
-            Some(pipe) => pipe.unsub(client_id),
-            None => (),
+            Some(pipe) => {
+                pipe.unsub(client_id);
+                Ok(())
+            }
+            None => Err(Error::new(ErrorKind::NotFound, "Pipe not found")),
         }
     }
 
@@ -167,7 +171,7 @@ impl Msg {
             tag: tag.unwrap_or("".to_string()),
         }
     }
-    
+
     pub fn id(&self) -> &str {
         &self.id
     }
@@ -267,9 +271,9 @@ mod tests {
         broker.new_pipe("pipe1");
 
         broker.sub("pipe1", "client1");
-        broker.sub("pipe1", "client1"); 
+        broker.sub("pipe1", "client1");
         broker.unsub("pipe1", "client1");
-        broker.unsub("pipe1", "client1"); 
+        broker.unsub("pipe1", "client1");
 
         let pipe = broker.pipes.get("pipe1").unwrap();
         assert!(!pipe.subs.contains("client1"));
