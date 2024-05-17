@@ -1,9 +1,7 @@
 use std::io::{Error, ErrorKind};
 use std::sync::Arc;
-use tokio::io::{split, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::tcp::{OwnedWriteHalf, ReadHalf, WriteHalf};
-use tokio::net::{TcpListener, TcpSocket, TcpStream};
-use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::{TcpListener, TcpStream, tcp::OwnedWriteHalf};
 use tokio::sync::Mutex;
 mod pipes;
 use lazy_static::lazy_static;
@@ -11,6 +9,7 @@ use pipes::Broker;
 
 lazy_static! {
     static ref BROKER: Arc<Mutex<Broker>> = Arc::new(Mutex::new(Broker::new("local")));
+    static ref CONNS: Arc<Mutex<Vec<Arc<Mutex<OwnedWriteHalf>>>>> = Arc::new(Mutex::new(Vec::new()));
 }
 
 #[tokio::main]
@@ -26,13 +25,20 @@ async fn main() {
 
     loop {
         let (socket, _addr) = listener.accept().await.unwrap();
-        handle_client(socket).await;
+        let (read_half, write_half) = TcpStream::into_split(socket);
+        let write_half = Arc::new(Mutex::new(write_half));
+
+        {
+            let mut conns = CONNS.lock().await;
+            conns.push(write_half.clone());
+        }
+
+        handle_client(read_half, write_half.clone()).await;
     }
 }
 
-async fn handle_client(mut socket: TcpStream) {
+async fn handle_client(read_half: tokio::net::tcp::OwnedReadHalf, write_half: Arc<Mutex<tokio::net::tcp::OwnedWriteHalf>>) {
     tokio::spawn(async move {
-        let (read_half, mut write_half) = socket.split();
         let mut reader = BufReader::new(read_half);
         let mut line = String::new();
         loop {
@@ -57,12 +63,19 @@ async fn handle_client(mut socket: TcpStream) {
                     .unwrap_or_else(|e| e.to_string()),
                 Prefix::Unknown => handle_unknown().await,
             };
-            println!("Responding with: {}", response);
             {
                 let broker = BROKER.lock().await;
-                println!("Broker: {:#?}", broker);
+                println!("Broker: {:#?}", broker); // debug
             }
-            write_half.write_all(response.as_bytes()).await.unwrap();
+            {
+                let mut conns = CONNS.lock().await;
+                for conn in conns.iter() {
+                    let mut conn_guard = conn.lock().await;
+                    conn_guard.write_all("heartbeat\r\n".as_bytes()).await.unwrap();
+                }
+            }
+            let mut write_guard = write_half.lock().await;
+            write_guard.write_all(response.as_bytes()).await.unwrap();
             line.clear();
         }
     });
