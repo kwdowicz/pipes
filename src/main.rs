@@ -12,6 +12,7 @@ lazy_static! {
     static ref CONNS: Arc<Mutex<Vec<Arc<Mutex<OwnedWriteHalf>>>>> = Arc::new(Mutex::new(Vec::new()));
 }
 
+//
 #[tokio::main]
 async fn main() {
     {
@@ -68,7 +69,7 @@ async fn handle_client(read_half: tokio::net::tcp::OwnedReadHalf, write_half: Ar
                 println!("Broker: {:#?}", broker); // debug
             }
             {
-                let mut conns = CONNS.lock().await;
+                let conns = CONNS.lock().await;
                 for conn in conns.iter() {
                     let mut conn_guard = conn.lock().await;
                     conn_guard.write_all("heartbeat\r\n".as_bytes()).await.unwrap();
