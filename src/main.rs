@@ -12,7 +12,7 @@ lazy_static! {
     static ref CONNS: Arc<Mutex<Vec<Arc<Mutex<OwnedWriteHalf>>>>> = Arc::new(Mutex::new(Vec::new()));
 }
 
-//
+// grpc
 #[tokio::main]
 async fn main() {
     {
