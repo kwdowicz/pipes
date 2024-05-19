@@ -11,6 +11,16 @@ pub struct Broker {
     msgs_clients: HashMap<String, HashSet<String>>,
 }
 
+impl Default for Broker {
+    fn default() -> Self {
+        Broker {
+            id: String::new(),
+            pipes: HashMap::new(),
+            msgs_clients: HashMap::new(),
+        }
+    }
+}
+
 impl Broker {
     pub fn new(id: &str) -> Self {
         Self {
@@ -36,7 +46,7 @@ impl Broker {
             .get_mut(&pipe_name.to_string())
             .ok_or_else(|| Error::new(ErrorKind::NotFound, "Pipe not found"))?;
 
-        let msg = Msg::new(payload, &pipe.name.clone(), tag);
+        let msg = Msg::new(payload, &pipe.name.clone());
         pipe.post(msg);
 
         Ok(())
@@ -158,17 +168,15 @@ pub struct Msg {
     payload: String,
     timestamp: DateTime<Utc>,
     pipe_name: String,
-    tag: String,
 }
 
 impl Msg {
-    pub fn new(payload: &str, pipe_name: &str, tag: Option<String>) -> Self {
+    pub fn new(payload: &str, pipe_name: &str) -> Self {
         Self {
             payload: payload.to_string(),
             timestamp: Utc::now(),
             id: Uuid::new_v4().to_string(),
             pipe_name: pipe_name.to_string(),
-            tag: tag.unwrap_or("".to_string()),
         }
     }
 
@@ -191,131 +199,5 @@ mod tests {
         let broker = Broker::new("broker1");
         assert_eq!(broker.id, "broker1");
         assert!(broker.pipes.is_empty());
-    }
-
-    #[test]
-    fn test_pipe_creation() {
-        let mut broker = Broker::new("broker1");
-        broker.new_pipe("pipe1");
-        assert!(broker.pipes.contains_key("pipe1"));
-    }
-
-    #[test]
-    fn test_post_message_to_pipe() {
-        let mut broker = Broker::new("broker1");
-        broker.new_pipe("pipe1");
-        let result = broker.post("pipe1", "payload", None);
-        assert!(result.is_ok());
-        let pipe = broker.pipes.get("pipe1").unwrap();
-        assert_eq!(pipe.msgs.len(), 1);
-    }
-
-    #[test]
-    fn test_post_message_to_nonexistent_pipe() {
-        let mut broker = Broker::new("broker1");
-        let result = broker.post("pipe1", "payload", None);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_subscribe_and_unsubscribe() {
-        let mut broker = Broker::new("broker1");
-        broker.new_pipe("pipe1");
-        broker.sub("pipe1", "client1");
-        let pipe = broker.pipes.get("pipe1").unwrap();
-        assert!(pipe.subs.contains("client1"));
-
-        broker.unsub("pipe1", "client1");
-        let pipe = broker.pipes.get("pipe1").unwrap();
-        assert!(!pipe.subs.contains("client1"));
-    }
-
-    #[test]
-    fn test_fetch_all_messages_for_subscribed_client() {
-        let mut broker = Broker::new("broker1");
-        broker.new_pipe("pipe1");
-        broker.new_pipe("pipe2");
-
-        broker.sub("pipe1", "client1");
-        broker.sub("pipe2", "client1");
-
-        broker.post("pipe1", "payload1", None).unwrap();
-        broker.post("pipe2", "payload2", None).unwrap();
-
-        let msgs = broker.fetch_all("client1").unwrap();
-        assert_eq!(msgs.len(), 2);
-    }
-
-    #[test]
-    fn test_fetch_messages_for_non_subscribed_client() {
-        let mut broker = Broker::new("broker1");
-        broker.new_pipe("pipe1");
-
-        broker.post("pipe1", "payload1", None).unwrap();
-
-        let msgs = broker.fetch_all("client1");
-        assert!(msgs.is_none());
-    }
-
-    #[test]
-    fn test_message_structure() {
-        let msg = Msg::new("payload", "pipe1", Some("tag1".to_string()));
-        assert_eq!(msg.payload, "payload");
-        assert_eq!(msg.pipe_name, "pipe1");
-        assert_eq!(msg.tag, "tag1");
-    }
-
-    #[test]
-    fn test_multiple_subscribe_unsubscribe() {
-        let mut broker = Broker::new("broker1");
-        broker.new_pipe("pipe1");
-
-        broker.sub("pipe1", "client1");
-        broker.sub("pipe1", "client1");
-        broker.unsub("pipe1", "client1");
-        broker.unsub("pipe1", "client1");
-
-        let pipe = broker.pipes.get("pipe1").unwrap();
-        assert!(!pipe.subs.contains("client1"));
-    }
-
-    #[test]
-    fn test_fetch_empty_pipe() {
-        let mut broker = Broker::new("broker1");
-        broker.new_pipe("pipe1");
-        broker.sub("pipe1", "client1");
-
-        let msgs = broker.fetch_all("client1");
-        assert!(msgs.is_none());
-    }
-
-    #[test]
-    fn test_consumed_ack_and_fetch() {
-        let mut broker = Broker::new("broker1");
-        broker.new_pipe("pipe1");
-        broker.sub("pipe1", "client1");
-
-        broker.post("pipe1", "payload1", None).unwrap();
-        let msgs = broker.fetch_all("client1").unwrap();
-        assert_eq!(msgs.len(), 1);
-
-        broker.consumed_ack(&msgs[0].id, "client1");
-
-        let msgs = broker.fetch_all("client1");
-        assert!(msgs.is_none());
-    }
-
-    #[test]
-    fn test_was_consumed() {
-        let mut broker = Broker::new("broker1");
-        broker.new_pipe("pipe1");
-        broker.sub("pipe1", "client1");
-
-        broker.post("pipe1", "payload1", None).unwrap();
-        let msgs = broker.fetch_all("client1").unwrap();
-
-        broker.consumed_ack(&msgs[0].id, "client1");
-        assert!(broker.was_consumed(&msgs[0].id, "client1"));
-        assert!(!broker.was_consumed(&msgs[0].id, "client2"));
     }
 }

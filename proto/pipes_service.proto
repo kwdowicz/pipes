@@ -1,0 +1,14 @@
+syntax = "proto3";
+package pipes_service;
+
+service PipesService {
+  rpc Subscribe (SubRequest) returns (SubReply);
+}
+
+message SubRequest {
+  string pipe_name = 1;
+}
+
+message SubReply {
+  string sub_reply = 1;
+}
