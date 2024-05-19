@@ -6,50 +6,44 @@ use chrono::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct Broker {
-    id: String,
     pipes: HashMap<String, Pipe>,
-    msgs_clients: HashMap<String, HashSet<String>>,
+    acked_msgs: HashMap<String, HashSet<String>>,
 }
 
 impl Default for Broker {
     fn default() -> Self {
         Broker {
-            id: String::new(),
             pipes: HashMap::new(),
-            msgs_clients: HashMap::new(),
+            acked_msgs: HashMap::new(),
         }
     }
 }
 
 impl Broker {
-    pub fn new(id: &str) -> Self {
+    pub fn new() -> Self {
         Self {
             pipes: HashMap::new(),
-            id: id.to_string(),
-            msgs_clients: HashMap::new(),
+            acked_msgs: HashMap::new(),
         }
     }
 
     pub fn new_pipe(&mut self, name: &str) {
-        let new_pipe = Pipe::new(name.to_string(), self.id.clone());
+        let new_pipe = Pipe::new(name);
         self.pipes.insert(new_pipe.name.clone(), new_pipe);
     }
 
     pub fn post(
-        &mut self,
-        pipe_name: &str,
-        payload: &str,
-        tag: Option<String>,
-    ) -> Result<(), Error> {
+        &mut self, pipe_name: &str, payload: &str) -> Result<String, Error> {
         let pipe = self
             .pipes
             .get_mut(&pipe_name.to_string())
             .ok_or_else(|| Error::new(ErrorKind::NotFound, "Pipe not found"))?;
 
         let msg = Msg::new(payload, &pipe.name.clone());
+        let msg_id = msg.id.clone();
         pipe.post(msg);
 
-        Ok(())
+        Ok(msg_id)
     }
 
     pub fn sub(&mut self, pipe_name: &str, client_id: &str) -> Result<(), Error> {
@@ -72,7 +66,7 @@ impl Broker {
         }
     }
 
-    pub fn fetch_all(&self, client_id: &str) -> Option<Vec<Msg>> {
+    pub fn fetch(&self, client_id: &str) -> Option<Vec<Msg>> {
         let mut msgs = vec![];
         for pipe in self
             .pipes
@@ -93,15 +87,16 @@ impl Broker {
         }
     }
 
-    pub fn consumed_ack(&mut self, msg_id: &str, client_id: &str) {
-        self.msgs_clients
+    pub fn consumed_ack(&mut self, msg_id: &str, client_id: &str) -> Result<(), Error>{
+        self.acked_msgs
             .entry(msg_id.to_string())
             .or_insert_with(HashSet::new)
             .insert(client_id.to_string());
+        Ok(())
     }
 
     pub fn was_consumed(&self, msg_id: &str, client_id: &str) -> bool {
-        match self.msgs_clients.get(msg_id) {
+        match self.acked_msgs.get(msg_id) {
             None => false,
             Some(clients) => {
                 if clients.contains(client_id) {
@@ -117,23 +112,23 @@ impl Broker {
 #[derive(Debug, Clone)]
 pub struct Pipe {
     name: String,
-    broker_id: String,
     msgs: Vec<Msg>,
     subs: HashSet<String>,
 }
 
 impl Pipe {
-    pub fn new(name: String, broker_id: String) -> Self {
+    pub fn new(name: &str) -> Self {
         Self {
-            name,
-            broker_id,
+            name: name.to_string(),
             msgs: vec![],
             subs: HashSet::new(),
         }
     }
 
-    pub fn post(&mut self, msg: Msg) {
+    pub fn post(&mut self, msg: Msg) -> String {
+        let msg_id = msg.id.clone();
         self.msgs.push(msg);
+        msg_id
     }
 
     pub fn sub(&mut self, client_id: &str) {
@@ -167,7 +162,6 @@ pub struct Msg {
     id: String,
     payload: String,
     timestamp: DateTime<Utc>,
-    pipe_name: String,
 }
 
 impl Msg {
@@ -176,7 +170,6 @@ impl Msg {
             payload: payload.to_string(),
             timestamp: Utc::now(),
             id: Uuid::new_v4().to_string(),
-            pipe_name: pipe_name.to_string(),
         }
     }
 
@@ -196,8 +189,7 @@ mod tests {
 
     #[test]
     fn test_broker_creation() {
-        let broker = Broker::new("broker1");
-        assert_eq!(broker.id, "broker1");
+        let broker = Broker::new();
         assert!(broker.pipes.is_empty());
     }
 }

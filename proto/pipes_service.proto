@@ -1,9 +1,13 @@
 syntax = "proto3";
 package pipes_service;
+import "google/protobuf/timestamp.proto";
 
 service PipesService {
   rpc Subscribe (SubRequest) returns (SubReply);
   rpc Unsubscribe (UnsubRequest) returns (UnsubReply);
+  rpc Post (PostRequest) returns (PostReply);
+  rpc Ack (AckRequest) returns (AckReply);
+  rpc Fetch (FetchRequest) returns (FetchReply);
 }
 
 message SubRequest {
@@ -20,4 +24,36 @@ message UnsubRequest {
 
 message UnsubReply {
   string unsub_reply = 1;
+}
+
+message PostRequest {
+  string pipe_name = 1;
+  string payload = 2;
+}
+
+message PostReply {
+  string msg_id = 1;
+}
+
+message AckRequest {
+  string msg_id = 1;
+  string client_id = 2;
+}
+
+message AckReply {
+  string ack_reply = 1;
+}
+
+message Msg {
+  string id = 1;
+  string payload = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+message FetchRequest {
+  string client_id = 1;
+}
+
+message FetchReply {
+  repeated Msg messages = 1;
 }
