@@ -1,12 +1,15 @@
+
 mod pipes_service {
     tonic::include_proto!("pipes_service");
 }
+
 use pipes_service::pipes_service_server::{PipesService, PipesServiceServer};
-use pipes_service::{SubReply, SubRequest};
+use pipes_service::{SubReply, SubRequest, UnsubRequest, UnsubReply};
 use std::sync::{Arc, Mutex};
 use tonic::{transport::Server, Request, Response, Status};
 
 mod pipes;
+
 use pipes::Broker;
 
 #[derive(Debug, Default)]
@@ -33,6 +36,24 @@ impl PipesService for MyPipesService {
 
         Ok(Response::new(reply))
     }
+
+    async fn unsubscribe(&self, request: Request<UnsubRequest>) -> Result<Response<UnsubReply>, Status> {
+        println!("Got a request: {:?}", request);
+
+        let reply_content = match self.broker.lock() {
+            Ok(mut broker) => broker
+                .unsub(&request.into_inner().pipe_name, "client1")
+                .map(|_| "Unsubscription successful".to_string())
+                .unwrap_or_else(|e| e.to_string()),
+            Err(_) => "Failed to acquire lock".to_string(),
+        };
+
+        let reply = UnsubReply {
+            unsub_reply: reply_content,
+        };
+
+        Ok(Response::new(reply))
+    }
 }
 
 #[tokio::main]
@@ -52,4 +73,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
