@@ -667,6 +667,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "prost",
+ "prost-types",
  "tokio",
  "tonic",
  "tonic-build",

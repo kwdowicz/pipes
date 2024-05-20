@@ -159,9 +159,9 @@ impl Pipe {
 
 #[derive(Debug, Clone)]
 pub struct Msg {
-    id: String,
-    payload: String,
-    timestamp: DateTime<Utc>,
+    pub id: String,
+    pub payload: String,
+    pub timestamp: DateTime<Utc>,
 }
 
 impl Msg {

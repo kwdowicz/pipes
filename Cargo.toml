@@ -9,6 +9,7 @@ tokio = { version = "1.37", features = ["full"] }
 uuid = { version = "1.8.0", features = ["v4"] }
 tonic = "0.11"
 prost = "0.12"
+prost-types = "0.12.6"
 
 [build-dependencies]
 tonic-build = "0.11"

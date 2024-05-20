@@ -7,10 +7,13 @@ use pipes_service::pipes_service_server::{PipesService, PipesServiceServer};
 use pipes_service::{SubReply, SubRequest, UnsubRequest, UnsubReply, PostRequest, PostReply, AckRequest, AckReply, FetchRequest, FetchReply};
 use std::sync::{Arc, Mutex};
 use tonic::{transport::Server, Request, Response, Status};
+use chrono::{DateTime, Utc};
+use prost_types::Timestamp;
 
 mod pipes;
 
-use pipes::Broker;
+use pipes::{Broker};
+use crate::pipes::Msg;
 
 #[derive(Debug, Default)]
 pub struct MyPipesService {
@@ -92,24 +95,38 @@ impl PipesService for MyPipesService {
     }
 
     async fn fetch(
-        &self,request: Request<FetchRequest>,) -> Result<Response<FetchResponse>, Status> {
-        let client_id = request.into_inner().client_id;
+        &self,request: Request<FetchRequest>,) -> Result<Response<FetchReply>, Status> {
+        let inner_request = request.into_inner();
+        let client_id = inner_request.client_id;
+        let mut messages = Vec::new();
 
-        let mut msgs = vec![];
-        for pipe in self
-            .pipes
-            .values()
-            .filter(|p| p.has_sub(&client_id))
-        {
-            msgs.append(&mut pipe.fetch(&client_id).unwrap_or(vec![]));
+        match self.broker.lock() {
+            Ok(mut broker) => match broker.fetch(&client_id) {
+                Some(msgs) => messages.extend(msgs.into_iter().map(pipes_service::Msg::from)),
+                None => return Err(Status::internal("No messages to fetch".to_string())),
+            },
+            Err(_) => return Err(Status::internal("Failed to acquire lock".to_string())),
+        };
+
+
+        Ok(Response::new(FetchReply { messages }))
+    }
+}
+
+impl From<pipes::Msg> for pipes_service::Msg {
+    fn from(msg: pipes::Msg) -> Self {
+        pipes_service::Msg {
+            id: msg.id.to_string(),
+            payload: msg.payload.to_string(),
+            timestamp: Some(datetime_to_prost_timestamp(msg.timestamp)),
         }
-        let filtered_msgs: Vec<Msg> = msgs
-            .iter()
-            .filter(|m| !self.was_consumed(&m.id, &client_id))
-            .cloned()
-            .map(|msg| msg.to_proto())
-            .collect();
-        Ok(Response::new(FetchResponse { messages: filtered_msgs }))
+    }
+}
+
+fn datetime_to_prost_timestamp(datetime: DateTime<Utc>) -> Timestamp {
+    Timestamp {
+        seconds: datetime.timestamp(),
+        nanos: datetime.timestamp_subsec_nanos() as i32,
     }
 }
 
